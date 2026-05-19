@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chess Empires</title>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; display: flex; font-family: monospace; color: #eee; }
+  #game-container { flex: 0 0 auto; }
+  #ui-panel {
+    width: 260px; padding: 16px; background: #16213e;
+    display: flex; flex-direction: column; gap: 12px;
+    border-left: 2px solid #0f3460; overflow-y: auto; height: 100vh;
+  }
+  #ui-panel h2 { color: #e94560; font-size: 18px; }
+  .stat-block { background: #0f3460; padding: 8px; border-radius: 4px; font-size: 13px; line-height: 1.7; }
+  .stat-block b { color: #e94560; }
+  #status-msg { color: #f5a623; font-size: 13px; min-height: 36px; }
+  button {
+    padding: 8px; background: #e94560; color: #fff; border: none;
+    border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 14px;
+  }
+  button:hover { background: #c73652; }
+  button:disabled { background: #555; cursor: default; }
+  #legend { font-size: 11px; line-height: 2; }
+  .leg { display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="game-container"></div>
+<div id="ui-panel">
+  <h2>Chess Empires</h2>
+  <div class="stat-block" id="turn-info">Loading…</div>
+  <div id="status-msg"></div>
+  <div class="stat-block" id="selected-info" style="display:none"></div>
+  <button id="end-turn-btn" disabled>End Turn</button>
+  <button onclick="location.href='/game/new/'">New Game</button>
+  <div class="stat-block" id="legend">
+    <b>Terrain</b><br>
+    <span class="leg" style="background:#8fbc8f"></span>Plains &nbsp;
+    <span class="leg" style="background:#c8a96e"></span>Road<br>
+    <span class="leg" style="background:#228b22"></span>Forest &nbsp;
+    <span class="leg" style="background:#808080"></span>Mountain<br>
+    <span class="leg" style="background:#1e90ff"></span>Water<br><br>
+    <b>Pieces</b><br>
+    Blue = Player 1 &nbsp; Red = Player 2<br>
+    K=King Q=Queen R=Rook<br>
+    B=Bishop N=Knight P=Pawn<br><br>
+    <b>Buildings</b><br>
+    <span class="leg" style="background:#ffd700"></span>Castle (C) &nbsp;
+    <span class="leg" style="background:#dda0dd"></span>House (H)
+  </div>
+</div>
+
+<script>
+const GAME_ID = {{ game_id }};
+const TILE_SIZE = 72;
+const BOARD = 8;
+
+const TERRAIN_COLORS = {
+  plains: 0x8fbc8f,
+  road:   0xc8a96e,
+  forest: 0x228b22,
+  mountain: 0x808080,
+  water:  0x1e90ff,
+};
+
+const PIECE_LETTERS = {
+  king:'K', queen:'Q', rook:'R', bishop:'B', knight:'N', pawn:'P'
+};
+
+const CSRFTOKEN = (()=>{
+  const m = document.cookie.match(/csrftoken=([^;]+)/);
+  return m ? m[1] : '';
+})();
+
+function getCsrf() {
+  // Fetch a fresh csrf token from the cookie each call
+  const m = document.cookie.match(/csrftoken=([^;]+)/);
+  return m ? m[1] : CSRFTOKEN;
+}
+
+async function post(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+// -----------------------------------------------------------------------
+// Phaser Scene
+// -----------------------------------------------------------------------
+class GameScene extends Phaser.Scene {
+  constructor() { super('GameScene'); }
+
+  preload() {}
+
+  create() {
+    this.state = null;
+    this.selectedPiece = null;
+    this.validMoves = [];
+    this.validAttacks = [];
+
+    this.tileGraphics = [];    // flat array of Phaser Graphics per tile
+    this.pieceObjects = {};    // piece.id -> { circle, label }
+    this.buildingObjects = {}; // building.id -> { rect, label } (keyed by tile pos)
+    this.highlightLayer = this.add.graphics();
+    this.tooltipBg = this.add.graphics();
+    this.tooltipText = this.add.text(0, 0, '', {
+      fontSize: '11px', fontFamily: 'monospace', color: '#fff',
+      backgroundColor: '#000000cc', padding: { x: 4, y: 3 }
+    }).setDepth(10).setVisible(false);
+
+    this.input.on('pointermove', (ptr) => this.onHover(ptr));
+    this.loadState();
+  }
+
+  // -----------------------------------------------------------------------
+
+  async loadState() {
+    const res = await fetch(`/game/${GAME_ID}/state/`);
+    this.state = await res.json();
+    this.selectedPiece = null;
+    this.validMoves = [];
+    this.validAttacks = [];
+    this.renderBoard();
+    this.updateUI();
+  }
+
+  renderBoard() {
+    const s = this.state;
+
+    // Build lookup maps
+    this.tileMap = {};
+    for (const t of s.tiles) this.tileMap[`${t.x},${t.y}`] = t;
+
+    this.buildingMap = {};
+    for (const b of s.buildings) this.buildingMap[b.id] = b;
+
+    this.pieceByPos = {};
+    for (const p of s.pieces) this.pieceByPos[`${p.x},${p.y}`] = p;
+
+    // Draw tiles
+    this.children.list
+      .filter(c => c._isTile)
+      .forEach(c => c.destroy());
+
+    for (const t of s.tiles) {
+      const px = t.y * TILE_SIZE;
+      const py = t.x * TILE_SIZE;
+      const g = this.add.graphics();
+      g._isTile = true;
+      g.fillStyle(TERRAIN_COLORS[t.terrain] || 0x888888);
+      g.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+      g.lineStyle(1, 0x000000, 0.3);
+      g.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+
+      // Building
+      if (t.building_id) {
+        const b = this.buildingMap[t.building_id];
+        if (b) {
+          const color = b.type === 'castle'
+            ? (b.owner === 1 ? 0xffd700 : b.owner === 2 ? 0xff8c00 : 0xf0e68c)
+            : 0xdda0dd;
+          g.fillStyle(color, 0.85);
+          g.fillRect(px + 6, py + 6, TILE_SIZE - 12, TILE_SIZE - 12);
+          this.add.text(px + TILE_SIZE/2, py + TILE_SIZE/2,
+            b.type === 'castle' ? 'C' : 'H',
+            { fontSize: '14px', fontFamily: 'monospace', color: '#111', fontStyle: 'bold' }
+          ).setOrigin(0.5)._isTile = true;
+          // Re-flag the text (add.text returns new object, flag it)
+          const last = this.children.list[this.children.list.length - 1];
+          last._isTile = true;
+        }
+      }
+
+      // Tile click zone
+      const zone = this.add.zone(px, py, TILE_SIZE, TILE_SIZE).setOrigin(0).setInteractive();
+      zone._isTile = true;
+      zone._tx = t.x;
+      zone._ty = t.y;
+      zone.on('pointerdown', () => this.onTileClick(t.x, t.y));
+    }
+
+    // Pieces
+    Object.values(this.pieceObjects).forEach(o => { o.circle.destroy(); o.label.destroy(); });
+    this.pieceObjects = {};
+
+    for (const p of s.pieces) {
+      const px = p.y * TILE_SIZE + TILE_SIZE / 2;
+      const py = p.x * TILE_SIZE + TILE_SIZE / 2;
+      const color = p.owner === 1 ? 0x3a7bd5 : 0xe94560;
+      const circle = this.add.graphics().setDepth(2);
+      circle.fillStyle(color, 1);
+      circle.fillCircle(px, py, TILE_SIZE / 2 - 6);
+      // HP ring
+      const hpFrac = p.hp / p.max_hp;
+      circle.lineStyle(3, hpFrac > 0.5 ? 0x00ff88 : hpFrac > 0.25 ? 0xffaa00 : 0xff2200);
+      circle.strokeCircle(px, py, TILE_SIZE / 2 - 6);
+      circle.setInteractive(
+        new Phaser.Geom.Circle(px, py, TILE_SIZE / 2 - 6),
+        Phaser.Geom.Circle.Contains
+      );
+      circle.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this.onPieceClick(p); });
+
+      const label = this.add.text(px, py, PIECE_LETTERS[p.type], {
+        fontSize: '20px', fontFamily: 'monospace', color: '#fff', fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(3);
+      // Gray out pieces that can't act
+      if (p.owner !== s.current_player || (p.has_moved && p.has_attacked)) {
+        circle.setAlpha(0.5);
+        label.setAlpha(0.5);
+      }
+
+      this.pieceObjects[p.id] = { circle, label, data: p };
+    }
+
+    this.drawHighlights();
+  }
+
+  drawHighlights() {
+    this.highlightLayer.clear();
+    for (const [tx, ty] of this.validMoves) {
+      const px = ty * TILE_SIZE, py = tx * TILE_SIZE;
+      this.highlightLayer.fillStyle(0xffff00, 0.35);
+      this.highlightLayer.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+      this.highlightLayer.lineStyle(2, 0xffff00, 0.9);
+      this.highlightLayer.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    }
+    for (const [tx, ty] of this.validAttacks) {
+      const px = ty * TILE_SIZE, py = tx * TILE_SIZE;
+      this.highlightLayer.fillStyle(0xff4444, 0.4);
+      this.highlightLayer.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+      this.highlightLayer.lineStyle(2, 0xff0000, 0.9);
+      this.highlightLayer.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    }
+    if (this.selectedPiece) {
+      const px = this.selectedPiece.y * TILE_SIZE;
+      const py = this.selectedPiece.x * TILE_SIZE;
+      this.highlightLayer.lineStyle(3, 0xffffff, 1);
+      this.highlightLayer.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    }
+    this.highlightLayer.setDepth(1);
+  }
+
+  // -----------------------------------------------------------------------
+  // Input
+  // -----------------------------------------------------------------------
+
+  async onPieceClick(piece) {
+    const s = this.state;
+    if (s.status !== 'active') return;
+
+    // If clicking an enemy when we have a selected piece → try attack
+    if (this.selectedPiece && piece.owner !== s.current_player) {
+      const pos = [piece.x, piece.y];
+      const canAtk = this.validAttacks.some(([x,y]) => x === piece.x && y === piece.y);
+      if (canAtk) {
+        await this.doAttack(this.selectedPiece.id, piece.id);
+        return;
+      }
+    }
+
+    // Select own piece
+    if (piece.owner !== s.current_player) return;
+    if (piece.has_moved && piece.has_attacked) {
+      this.setStatus('This piece has already acted this turn.');
+      return;
+    }
+
+    this.selectedPiece = piece;
+    const res = await fetch(`/game/${GAME_ID}/moves/${piece.id}/`);
+    const data = await res.json();
+    this.validMoves = data.moves.map(m => [m.x, m.y]);
+    this.validAttacks = data.attacks.map(a => [a.x, a.y]);
+    this.drawHighlights();
+    this.showSelectedInfo(piece);
+  }
+
+  async onTileClick(tx, ty) {
+    if (!this.selectedPiece) return;
+    const canMove = this.validMoves.some(([x,y]) => x === tx && y === ty);
+    if (!canMove) {
+      this.selectedPiece = null;
+      this.validMoves = [];
+      this.validAttacks = [];
+      this.drawHighlights();
+      document.getElementById('selected-info').style.display = 'none';
+      return;
+    }
+    await this.doMove(this.selectedPiece.id, tx, ty);
+  }
+
+  async doMove(pieceId, tx, ty) {
+    this.setStatus('Moving…');
+    const data = await post(`/game/${GAME_ID}/move/`, { piece_id: pieceId, x: tx, y: ty });
+    if (data.error) { this.setStatus('Error: ' + data.error); return; }
+    this.state = data;
+    this.selectedPiece = null;
+    this.validMoves = [];
+    this.validAttacks = [];
+    this.renderBoard();
+    this.updateUI();
+    this.setStatus('');
+  }
+
+  async doAttack(attackerId, targetId) {
+    this.setStatus('Attacking…');
+    const data = await post(`/game/${GAME_ID}/attack/`, { attacker_id: attackerId, target_id: targetId });
+    if (data.error) { this.setStatus('Error: ' + data.error); return; }
+    this.state = data;
+    this.selectedPiece = null;
+    this.validMoves = [];
+    this.validAttacks = [];
+    this.renderBoard();
+    this.updateUI();
+    if (data.status === 'finished') {
+      this.setStatus(`Player ${data.winner} wins! The King is dead!`);
+    } else {
+      this.setStatus('');
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // UI
+  // -----------------------------------------------------------------------
+
+  updateUI() {
+    const s = this.state;
+    const info = document.getElementById('turn-info');
+    const btn = document.getElementById('end-turn-btn');
+
+    if (s.status === 'finished') {
+      info.innerHTML = `<b>Game Over</b><br>Player ${s.winner} wins!`;
+      btn.disabled = true;
+      return;
+    }
+
+    const color = s.current_player === 1 ? '#3a7bd5' : '#e94560';
+    info.innerHTML =
+      `<b>Turn ${s.turn_number}</b><br>` +
+      `<b style="color:${color}">Player ${s.current_player}'s turn</b>`;
+    btn.disabled = false;
+  }
+
+  showSelectedInfo(piece) {
+    const el = document.getElementById('selected-info');
+    el.style.display = 'block';
+    el.innerHTML =
+      `<b>${piece.type.toUpperCase()}</b> (P${piece.owner})<br>` +
+      `HP: ${piece.hp}/${piece.max_hp}<br>` +
+      `ATK: ${piece.attack} &nbsp; DEF: ${piece.defense}<br>` +
+      `Move pts: ${piece.move_points}<br>` +
+      `XP: ${piece.xp} &nbsp; Lvl: ${piece.level}<br>` +
+      `Moved: ${piece.has_moved ? 'Yes' : 'No'} &nbsp; Attacked: ${piece.has_attacked ? 'Yes' : 'No'}`;
+  }
+
+  setStatus(msg) {
+    document.getElementById('status-msg').textContent = msg;
+  }
+
+  onHover(ptr) {
+    const tx = Math.floor(ptr.y / TILE_SIZE);
+    const ty = Math.floor(ptr.x / TILE_SIZE);
+    if (!this.state) return;
+    const piece = this.state.pieces.find(p => p.x === tx && p.y === ty);
+    if (piece) {
+      this.tooltipText
+        .setText(`${piece.type} P${piece.owner}\nHP:${piece.hp}/${piece.max_hp} ATK:${piece.attack}`)
+        .setPosition(ptr.x + 10, ptr.y - 10)
+        .setVisible(true);
+    } else {
+      this.tooltipText.setVisible(false);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------
+// End turn button wiring (outside Phaser)
+// -----------------------------------------------------------------------
+document.getElementById('end-turn-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('end-turn-btn');
+  btn.disabled = true;
+  const data = await post(`/game/${GAME_ID}/end_turn/`, {});
+  if (data.error) {
+    document.getElementById('status-msg').textContent = 'Error: ' + data.error;
+    btn.disabled = false;
+    return;
+  }
+  window.__gameScene.state = data;
+  window.__gameScene.selectedPiece = null;
+  window.__gameScene.validMoves = [];
+  window.__gameScene.validAttacks = [];
+  window.__gameScene.renderBoard();
+  window.__gameScene.updateUI();
+  document.getElementById('status-msg').textContent = '';
+  document.getElementById('selected-info').style.display = 'none';
+});
+
+// -----------------------------------------------------------------------
+// Boot
+// -----------------------------------------------------------------------
+const config = {
+  type: Phaser.AUTO,
+  width: BOARD * TILE_SIZE,
+  height: BOARD * TILE_SIZE,
+  parent: 'game-container',
+  backgroundColor: '#1a1a2e',
+  scene: GameScene,
+};
+
+const game = new Phaser.Game(config);
+game.events.on('ready', () => {
+  window.__gameScene = game.scene.getScene('GameScene');
+});
+</script>
+</body>
+</html>
