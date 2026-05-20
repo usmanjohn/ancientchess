@@ -4,52 +4,291 @@
 <meta charset="UTF-8">
 <title>Chess Empires</title>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #1a1a2e; display: flex; font-family: monospace; color: #eee; }
-  #game-container { flex: 0 0 auto; }
+
+  body {
+    background: #0d0d1a;
+    display: flex;
+    font-family: 'Cinzel', Georgia, serif;
+    color: #d4af7f;
+    min-height: 100vh;
+    background-image: radial-gradient(ellipse at 30% 50%, #1a1030 0%, #0d0d1a 70%);
+  }
+
+  #game-container {
+    border-right: 3px solid #5a3a00;
+    box-shadow: 4px 0 30px rgba(139,105,20,0.25);
+  }
+
+  #game-container canvas {
+    display: block;
+  }
+
+  /* ── Sidebar ── */
   #ui-panel {
-    width: 260px; padding: 16px; background: #16213e;
-    display: flex; flex-direction: column; gap: 12px;
-    border-left: 2px solid #0f3460; overflow-y: auto; height: 100vh;
+    width: 270px;
+    background: linear-gradient(180deg, #12001e 0%, #0a1030 55%, #08121e 100%);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid #2a1a40;
+    overflow-y: auto;
+    height: 100vh;
   }
-  #ui-panel h2 { color: #e94560; font-size: 18px; }
-  .stat-block { background: #0f3460; padding: 8px; border-radius: 4px; font-size: 13px; line-height: 1.7; }
-  .stat-block b { color: #e94560; }
-  #status-msg { color: #f5a623; font-size: 13px; min-height: 36px; }
+
+  .panel-header {
+    background: linear-gradient(160deg, #3a0e2a 0%, #1a0620 50%, #0e0e2e 100%);
+    padding: 18px 16px 14px;
+    border-bottom: 2px solid #7a4a00;
+    text-align: center;
+  }
+
+  .panel-header h1 {
+    font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+    font-size: 21px;
+    color: #ffd700;
+    text-shadow: 0 0 12px rgba(255,215,0,0.55), 0 2px 4px rgba(0,0,0,0.9);
+    letter-spacing: 3px;
+    line-height: 1.3;
+  }
+
+  .panel-header .subtitle {
+    font-size: 9px;
+    color: #8b5e14;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-top: 5px;
+  }
+
+  .panel-section {
+    padding: 10px 14px;
+    border-bottom: 1px solid #1e1230;
+  }
+
+  .section-title {
+    font-size: 8px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #7a4a00;
+    margin-bottom: 7px;
+  }
+
+  /* Turn info */
+  #turn-info {
+    background: rgba(10,8,30,0.7);
+    border: 1px solid #2a1a44;
+    border-radius: 5px;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.9;
+  }
+
+  #turn-info .turn-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: #6a4a00;
+    text-transform: uppercase;
+  }
+
+  #turn-info .player-name {
+    font-size: 17px;
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+
+  .p1color { color: #60aaff; text-shadow: 0 0 10px rgba(80,150,255,0.45); }
+  .p2color { color: #ff4a60; text-shadow: 0 0 10px rgba(255,60,80,0.45); }
+
+  /* Status */
+  #status-msg {
+    color: #f5a623;
+    font-size: 11px;
+    min-height: 28px;
+    font-style: italic;
+    text-align: center;
+    letter-spacing: 0.5px;
+    padding: 2px 0;
+  }
+
+  /* Selected unit */
+  #selected-info {
+    background: rgba(8,6,26,0.85);
+    border: 1px solid #3a1a5e;
+    border-radius: 5px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 2;
+    display: none;
+  }
+
+  .piece-title {
+    font-size: 15px;
+    font-weight: bold;
+    color: #ffd700;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    color: #8a7060;
+    font-size: 11px;
+  }
+
+  .stat-val { color: #e8c870; font-weight: bold; }
+
+  .hp-bar-outer {
+    width: 100%;
+    height: 5px;
+    background: #111128;
+    border-radius: 3px;
+    margin: 3px 0 5px;
+    overflow: hidden;
+    border: 1px solid #2a1a3e;
+  }
+
+  .hp-bar-inner {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  /* Buttons */
+  .btn-group { display: flex; flex-direction: column; gap: 8px; }
+
   button {
-    padding: 8px; background: #e94560; color: #fff; border: none;
-    border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 14px;
+    padding: 9px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+    font-weight: bold;
   }
-  button:hover { background: #c73652; }
-  button:disabled { background: #555; cursor: default; }
-  #legend { font-size: 11px; line-height: 2; }
-  .leg { display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+
+  #end-turn-btn {
+    background: linear-gradient(135deg, #0e3a1e 0%, #062010 100%);
+    border: 1px solid #2a6a3e;
+    color: #44dd88;
+  }
+
+  #end-turn-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1a5a2e 0%, #0e3a1e 100%);
+    box-shadow: 0 0 12px rgba(60,200,100,0.3);
+    color: #66ffaa;
+  }
+
+  #end-turn-btn:disabled {
+    background: #0e0e1e;
+    border-color: #252530;
+    color: #3a3a4a;
+    cursor: default;
+  }
+
+  .new-game-btn {
+    background: linear-gradient(135deg, #3a0e1e 0%, #200a10 100%);
+    border: 1px solid #6a2a3a;
+    color: #dd4466;
+  }
+
+  .new-game-btn:hover {
+    background: linear-gradient(135deg, #5a1a2e 0%, #3a0e1e 100%);
+    box-shadow: 0 0 12px rgba(200,60,80,0.3);
+    color: #ff6688;
+  }
+
+  /* Legend */
+  #legend { font-size: 10px; color: #6a5040; }
+
+  .legend-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: #7a6050;
+  }
+
+  .leg {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #3a2020, transparent);
+    margin: 2px 0;
+  }
+
+  /* Scrollbar */
+  #ui-panel::-webkit-scrollbar { width: 4px; }
+  #ui-panel::-webkit-scrollbar-track { background: #0a0a1a; }
+  #ui-panel::-webkit-scrollbar-thumb { background: #3a2a00; border-radius: 2px; }
 </style>
 </head>
 <body>
+
 <div id="game-container"></div>
+
 <div id="ui-panel">
-  <h2>Chess Empires</h2>
-  <div class="stat-block" id="turn-info">Loading…</div>
-  <div id="status-msg"></div>
-  <div class="stat-block" id="selected-info" style="display:none"></div>
-  <button id="end-turn-btn" disabled>End Turn</button>
-  <button onclick="location.href='/game/new/'">New Game</button>
-  <div class="stat-block" id="legend">
-    <b>Terrain</b><br>
-    <span class="leg" style="background:#8fbc8f"></span>Plains &nbsp;
-    <span class="leg" style="background:#c8a96e"></span>Road<br>
-    <span class="leg" style="background:#228b22"></span>Forest &nbsp;
-    <span class="leg" style="background:#808080"></span>Mountain<br>
-    <span class="leg" style="background:#1e90ff"></span>Water<br><br>
-    <b>Pieces</b><br>
-    Blue = Player 1 &nbsp; Red = Player 2<br>
-    K=King Q=Queen R=Rook<br>
-    B=Bishop N=Knight P=Pawn<br><br>
-    <b>Buildings</b><br>
-    <span class="leg" style="background:#ffd700"></span>Castle (C) &nbsp;
-    <span class="leg" style="background:#dda0dd"></span>House (H)
+  <div class="panel-header">
+    <h1>CHESS<br>EMPIRES</h1>
+    <div class="subtitle">Ancient Strategy</div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-title">Battle Status</div>
+    <div id="turn-info"><div class="turn-label">Loading…</div></div>
+  </div>
+
+  <div class="panel-section" style="padding-top:8px;padding-bottom:8px;">
+    <div id="status-msg">Awaiting orders…</div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-title">Selected Unit</div>
+    <div id="selected-info"></div>
+  </div>
+
+  <div class="panel-section">
+    <div class="btn-group">
+      <button id="end-turn-btn" disabled>⚔ End Turn</button>
+      <button class="new-game-btn" onclick="location.href='/game/new/'">✦ New Game</button>
+    </div>
+  </div>
+
+  <div class="panel-section" id="legend">
+    <div class="section-title">Terrain</div>
+    <div class="legend-grid">
+      <div class="legend-item"><span class="leg" style="background:#527a52"></span>Plains</div>
+      <div class="legend-item"><span class="leg" style="background:#c8a86a"></span>Road</div>
+      <div class="legend-item"><span class="leg" style="background:#145214"></span>Forest</div>
+      <div class="legend-item"><span class="leg" style="background:#5a5a6a"></span>Mountain</div>
+      <div class="legend-item"><span class="leg" style="background:#144a8a"></span>Water</div>
+    </div>
+    <div class="divider" style="margin:7px 0"></div>
+    <div class="section-title">Armies</div>
+    <div class="legend-item" style="margin-bottom:3px;color:#60aaff">♔ ♕ ♖ ♗ ♘ ♙ &nbsp; Player 1</div>
+    <div class="legend-item" style="color:#ff4a60">♚ ♛ ♜ ♝ ♞ ♟ &nbsp; Player 2</div>
+    <div class="divider" style="margin:7px 0"></div>
+    <div class="section-title">Buildings</div>
+    <div class="legend-item">🏰 &nbsp;Castle — generates gold &amp; heals</div>
+    <div class="legend-item" style="margin-top:3px">🏠 &nbsp;House — generates gold</div>
   </div>
 </div>
 
@@ -58,41 +297,44 @@ const GAME_ID = {{ game_id }};
 const TILE_SIZE = 72;
 const BOARD = 8;
 
-const TERRAIN_COLORS = {
-  plains: 0x8fbc8f,
-  road:   0xc8a96e,
-  forest: 0x228b22,
-  mountain: 0x808080,
-  water:  0x1e90ff,
+/* Terrain base colors — even/odd for subtle checkerboard */
+const TC = {
+  plains:   [0x527a52, 0x436843],
+  road:     [0xc8a86a, 0xb8985a],
+  forest:   [0x145214, 0x0e3e0e],
+  mountain: [0x5a5a6a, 0x4a4a5a],
+  water:    [0x144a8a, 0x0e3a7a],
 };
 
-const PIECE_LETTERS = {
-  king:'K', queen:'Q', rook:'R', bishop:'B', knight:'N', pawn:'P'
+/* Unicode chess symbols by owner */
+const SYM = {
+  1: { king:'♔', queen:'♕', rook:'♖', bishop:'♗', knight:'♘', pawn:'♙' },
+  2: { king:'♚', queen:'♛', rook:'♜', bishop:'♝', knight:'♞', pawn:'♟' },
 };
 
-const CSRFTOKEN = (()=>{
-  const m = document.cookie.match(/csrftoken=([^;]+)/);
-  return m ? m[1] : '';
-})();
+/* Piece rendering colors */
+const PC = {
+  1: { fill: 0x0e2a5e, ring: 0x4a90e2, text: '#b8d8ff' },
+  2: { fill: 0x5e0e1e, ring: 0xe2374a, text: '#ffb8c0' },
+};
 
 function getCsrf() {
-  // Fetch a fresh csrf token from the cookie each call
   const m = document.cookie.match(/csrftoken=([^;]+)/);
-  return m ? m[1] : CSRFTOKEN;
+  return m ? m[1] : '';
 }
 
 async function post(url, body) {
-  const res = await fetch(url, {
+  const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
     body: JSON.stringify(body),
   });
-  return res.json();
+  return r.json();
 }
 
-// -----------------------------------------------------------------------
-// Phaser Scene
-// -----------------------------------------------------------------------
+/* ═══════════════════════════════════════════════════════════
+   Phaser Scene
+═══════════════════════════════════════════════════════════ */
 class GameScene extends Phaser.Scene {
   constructor() { super('GameScene'); }
 
@@ -103,23 +345,19 @@ class GameScene extends Phaser.Scene {
     this.selectedPiece = null;
     this.validMoves = [];
     this.validAttacks = [];
-
-    this.tileGraphics = [];    // flat array of Phaser Graphics per tile
-    this.pieceObjects = {};    // piece.id -> { circle, label }
-    this.buildingObjects = {}; // building.id -> { rect, label } (keyed by tile pos)
+    this.pieceObjects = {};   // id → { bg, sym, hpBar, shadow }
     this.highlightLayer = this.add.graphics();
-    this.tooltipBg = this.add.graphics();
-    this.tooltipText = this.add.text(0, 0, '', {
-      fontSize: '11px', fontFamily: 'monospace', color: '#fff',
-      backgroundColor: '#000000cc', padding: { x: 4, y: 3 }
-    }).setDepth(10).setVisible(false);
+    this.tooltip = this.add.text(0, 0, '', {
+      fontSize: '11px', fontFamily: 'monospace', color: '#e8e8e8',
+      backgroundColor: '#000000dd', padding: { x: 6, y: 4 },
+      lineSpacing: 3,
+    }).setDepth(30).setVisible(false);
 
-    this.input.on('pointermove', (ptr) => this.onHover(ptr));
+    this.input.on('pointermove', p => this.onHover(p));
     this.loadState();
   }
 
-  // -----------------------------------------------------------------------
-
+  /* ── State ── */
   async loadState() {
     const res = await fetch(`/game/${GAME_ID}/state/`);
     this.state = await res.json();
@@ -130,151 +368,287 @@ class GameScene extends Phaser.Scene {
     this.updateUI();
   }
 
+  /* ── Board render ── */
   renderBoard() {
     const s = this.state;
 
-    // Build lookup maps
+    /* Build lookup maps */
     this.tileMap = {};
     for (const t of s.tiles) this.tileMap[`${t.x},${t.y}`] = t;
-
     this.buildingMap = {};
     for (const b of s.buildings) this.buildingMap[b.id] = b;
-
     this.pieceByPos = {};
     for (const p of s.pieces) this.pieceByPos[`${p.x},${p.y}`] = p;
 
-    // Draw tiles
-    this.children.list
-      .filter(c => c._isTile)
-      .forEach(c => c.destroy());
+    /* Destroy old tile-layer objects */
+    this.children.list.filter(c => c._isTile).forEach(c => c.destroy());
 
+    /* Draw terrain + buildings + click zones */
     for (const t of s.tiles) {
       const px = t.y * TILE_SIZE;
       const py = t.x * TILE_SIZE;
+      const even = (t.x + t.y) % 2 === 0;
+      const colors = TC[t.terrain] || TC.plains;
+
       const g = this.add.graphics();
       g._isTile = true;
-      g.fillStyle(TERRAIN_COLORS[t.terrain] || 0x888888);
+
+      /* Terrain fill */
+      g.fillStyle(even ? colors[0] : colors[1]);
       g.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-      g.lineStyle(1, 0x000000, 0.3);
+
+      /* Texture overlay */
+      this.drawTerrainDetail(g, t.terrain, px, py);
+
+      /* Grid line */
+      g.lineStyle(0.5, 0x000000, 0.35);
       g.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
 
-      // Building
+      /* Building */
       if (t.building_id) {
         const b = this.buildingMap[t.building_id];
-        if (b) {
-          const color = b.type === 'castle'
-            ? (b.owner === 1 ? 0xffd700 : b.owner === 2 ? 0xff8c00 : 0xf0e68c)
-            : 0xdda0dd;
-          g.fillStyle(color, 0.85);
-          g.fillRect(px + 6, py + 6, TILE_SIZE - 12, TILE_SIZE - 12);
-          this.add.text(px + TILE_SIZE/2, py + TILE_SIZE/2,
-            b.type === 'castle' ? 'C' : 'H',
-            { fontSize: '14px', fontFamily: 'monospace', color: '#111', fontStyle: 'bold' }
-          ).setOrigin(0.5)._isTile = true;
-          // Re-flag the text (add.text returns new object, flag it)
-          const last = this.children.list[this.children.list.length - 1];
-          last._isTile = true;
-        }
+        if (b) this.drawBuilding(b, px, py);
       }
 
-      // Tile click zone
-      const zone = this.add.zone(px, py, TILE_SIZE, TILE_SIZE).setOrigin(0).setInteractive();
+      /* Click zone */
+      const zone = this.add.zone(px, py, TILE_SIZE, TILE_SIZE)
+        .setOrigin(0).setInteractive();
       zone._isTile = true;
-      zone._tx = t.x;
-      zone._ty = t.y;
       zone.on('pointerdown', () => this.onTileClick(t.x, t.y));
     }
 
-    // Pieces
-    Object.values(this.pieceObjects).forEach(o => { o.circle.destroy(); o.label.destroy(); });
-    this.pieceObjects = {};
+    /* Coordinate labels */
+    const COL_CHARS = 'abcdefgh';
+    for (let i = 0; i < 8; i++) {
+      const colLbl = this.add.text(i * TILE_SIZE + TILE_SIZE / 2, BOARD * TILE_SIZE - 3,
+        COL_CHARS[i], { fontSize: '8px', color: '#ffffff40', fontFamily: 'monospace' }
+      ).setOrigin(0.5, 1).setDepth(1);
+      colLbl._isTile = true;
 
-    for (const p of s.pieces) {
-      const px = p.y * TILE_SIZE + TILE_SIZE / 2;
-      const py = p.x * TILE_SIZE + TILE_SIZE / 2;
-      const color = p.owner === 1 ? 0x3a7bd5 : 0xe94560;
-      const circle = this.add.graphics().setDepth(2);
-      circle.fillStyle(color, 1);
-      circle.fillCircle(px, py, TILE_SIZE / 2 - 6);
-      // HP ring
-      const hpFrac = p.hp / p.max_hp;
-      circle.lineStyle(3, hpFrac > 0.5 ? 0x00ff88 : hpFrac > 0.25 ? 0xffaa00 : 0xff2200);
-      circle.strokeCircle(px, py, TILE_SIZE / 2 - 6);
-      circle.setInteractive(
-        new Phaser.Geom.Circle(px, py, TILE_SIZE / 2 - 6),
-        Phaser.Geom.Circle.Contains
-      );
-      circle.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this.onPieceClick(p); });
-
-      const label = this.add.text(px, py, PIECE_LETTERS[p.type], {
-        fontSize: '20px', fontFamily: 'monospace', color: '#fff', fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(3);
-      // Gray out pieces that can't act
-      if (p.owner !== s.current_player || (p.has_moved && p.has_attacked)) {
-        circle.setAlpha(0.5);
-        label.setAlpha(0.5);
-      }
-
-      this.pieceObjects[p.id] = { circle, label, data: p };
+      const rowLbl = this.add.text(2, (7 - i) * TILE_SIZE + TILE_SIZE / 2,
+        String(i + 1), { fontSize: '8px', color: '#ffffff40', fontFamily: 'monospace' }
+      ).setOrigin(0, 0.5).setDepth(1);
+      rowLbl._isTile = true;
     }
+
+    /* Pieces */
+    Object.values(this.pieceObjects).forEach(o => {
+      [o.shadow, o.bg, o.sym, o.hpBar].forEach(obj => obj && obj.destroy());
+    });
+    this.pieceObjects = {};
+    for (const p of s.pieces) this.drawPiece(p, s);
 
     this.drawHighlights();
   }
 
+  /* ── Terrain detail ── */
+  drawTerrainDetail(g, terrain, px, py) {
+    if (terrain === 'forest') {
+      g.fillStyle(0x0a3a0a, 0.55);
+      [[12,14],[34,10],[52,16],[20,38],[44,34],[28,56],[56,50]].forEach(([ox, oy]) => {
+        g.fillCircle(px + ox, py + oy, 5.5);
+      });
+      g.fillStyle(0x1a5a1a, 0.35);
+      [[22,24],[46,22],[36,46]].forEach(([ox, oy]) => {
+        g.fillCircle(px + ox, py + oy, 7);
+      });
+    } else if (terrain === 'mountain') {
+      g.fillStyle(0x888898, 0.45);
+      g.fillTriangle(px + 10, py + 62, px + 28, py + 26, px + 46, py + 62);
+      g.fillStyle(0x7a7a8a, 0.35);
+      g.fillTriangle(px + 30, py + 58, px + 50, py + 28, px + 68, py + 58);
+      g.fillStyle(0xeeeeff, 0.18);
+      g.fillTriangle(px + 20, py + 32, px + 28, py + 26, px + 36, py + 32);
+    } else if (terrain === 'water') {
+      g.lineStyle(1.2, 0x4a90d0, 0.45);
+      for (let wy = 14; wy < TILE_SIZE - 4; wy += 12) {
+        g.beginPath();
+        for (let wx = 0; wx <= TILE_SIZE; wx += 6) {
+          const y = py + wy + Math.sin((wx + wy) * 0.35) * 1.8;
+          wx === 0 ? g.moveTo(px + wx, y) : g.lineTo(px + wx, y);
+        }
+        g.strokePath();
+      }
+    } else if (terrain === 'road') {
+      g.fillStyle(0xd4b870, 0.25);
+      g.fillRect(px + TILE_SIZE / 2 - 5, py + 2, 10, TILE_SIZE - 4);
+      g.lineStyle(1, 0xffd070, 0.2);
+      g.lineBetween(px + TILE_SIZE / 2, py + 4, px + TILE_SIZE / 2, py + TILE_SIZE - 4);
+    }
+  }
+
+  /* ── Building ── */
+  drawBuilding(b, px, py) {
+    const isCastle = b.type === 'castle';
+    let bgColor, borderColor;
+    if (isCastle) {
+      bgColor     = b.owner === 1 ? 0x0a2050 : b.owner === 2 ? 0x501020 : 0x202010;
+      borderColor = b.owner === 1 ? 0x4a8ade : b.owner === 2 ? 0xde3a50 : 0xdeb040;
+    } else {
+      bgColor     = b.owner === 1 ? 0x0a183a : b.owner === 2 ? 0x3a0a14 : 0x1a1a1a;
+      borderColor = b.owner === 1 ? 0x3a6aaa : b.owner === 2 ? 0xaa3a4a : 0x888888;
+    }
+
+    const g = this.add.graphics().setDepth(0.6);
+    g._isTile = true;
+    const m = 4;
+    g.fillStyle(bgColor, 0.88);
+    g.fillRoundedRect(px + m, py + m, TILE_SIZE - m * 2, TILE_SIZE - m * 2, 5);
+    g.lineStyle(1.5, borderColor, 0.85);
+    g.strokeRoundedRect(px + m, py + m, TILE_SIZE - m * 2, TILE_SIZE - m * 2, 5);
+
+    /* Emoji icon */
+    const ico = this.add.text(px + TILE_SIZE / 2, py + TILE_SIZE / 2 - 3,
+      isCastle ? '🏰' : '🏠', {
+        fontSize: isCastle ? '30px' : '24px',
+      }
+    ).setOrigin(0.5).setDepth(1);
+    ico._isTile = true;
+
+    /* Ownership dot */
+    if (b.owner) {
+      const dot = this.add.graphics().setDepth(1.5);
+      dot._isTile = true;
+      dot.fillStyle(b.owner === 1 ? 0x4a90ff : 0xff3a5a);
+      dot.fillCircle(px + TILE_SIZE - 9, py + 9, 4);
+      dot.lineStyle(1, 0xffffff, 0.4);
+      dot.strokeCircle(px + TILE_SIZE - 9, py + 9, 4);
+    }
+  }
+
+  /* ── Piece ── */
+  drawPiece(p, s) {
+    const cx = p.y * TILE_SIZE + TILE_SIZE / 2;
+    const cy = p.x * TILE_SIZE + TILE_SIZE / 2;
+    const c  = PC[p.owner];
+    const active = p.owner === s.current_player && !(p.has_moved && p.has_attacked);
+    const a = active ? 1.0 : 0.5;
+    const r = TILE_SIZE / 2 - 7;
+    const hpFrac = p.hp / p.max_hp;
+    const ringColor = hpFrac > 0.6 ? 0x44ee88 : hpFrac > 0.3 ? 0xffaa22 : 0xff2222;
+
+    /* Drop shadow */
+    const shadow = this.add.graphics().setDepth(2);
+    shadow.fillStyle(0x000000, 0.4);
+    shadow.fillEllipse(cx + 3, cy + 5, r * 1.9, 9);
+    shadow.setAlpha(a * 0.7);
+
+    /* Body */
+    const bg = this.add.graphics().setDepth(3);
+
+    /* Glow halo for active pieces */
+    if (active) {
+      bg.fillStyle(c.ring, 0.12);
+      bg.fillCircle(cx, cy, r + 7);
+    }
+
+    /* Main fill */
+    bg.fillStyle(c.fill, 1);
+    bg.fillCircle(cx, cy, r);
+
+    /* Faction border */
+    bg.lineStyle(2.5, c.ring, active ? 0.9 : 0.5);
+    bg.strokeCircle(cx, cy, r);
+
+    /* HP arc — drawn outside the piece ring */
+    const arcR = r + 4.5;
+    const startA = -Math.PI / 2;
+    bg.lineStyle(2.5, ringColor, active ? 0.85 : 0.4);
+    bg.beginPath();
+    bg.arc(cx, cy, arcR, startA, startA + Math.PI * 2 * hpFrac, false);
+    bg.strokePath();
+
+    bg.setAlpha(a);
+    bg.setInteractive(new Phaser.Geom.Circle(cx, cy, r), Phaser.Geom.Circle.Contains);
+    bg.on('pointerdown', ptr => { ptr.event.stopPropagation(); this.onPieceClick(p); });
+
+    /* Chess symbol */
+    const sym = this.add.text(cx, cy - 1, SYM[p.owner][p.type], {
+      fontSize: '27px',
+      color: c.text,
+      stroke: '#000000',
+      strokeThickness: 3.5,
+    }).setOrigin(0.5).setDepth(4).setAlpha(a);
+
+    /* HP bar strip */
+    const bx = p.y * TILE_SIZE + 5;
+    const by = p.x * TILE_SIZE + TILE_SIZE - 5;
+    const bw = TILE_SIZE - 10;
+    const hpBar = this.add.graphics().setDepth(4);
+    hpBar.fillStyle(0x000000, 0.55);
+    hpBar.fillRect(bx, by, bw, 3);
+    hpBar.fillStyle(ringColor, 0.9);
+    hpBar.fillRect(bx, by, bw * hpFrac, 3);
+    hpBar.setAlpha(a);
+
+    this.pieceObjects[p.id] = { shadow, bg, sym, hpBar, data: p };
+  }
+
+  /* ── Highlights ── */
   drawHighlights() {
     this.highlightLayer.clear();
+
+    /* Move targets */
     for (const [tx, ty] of this.validMoves) {
       const px = ty * TILE_SIZE, py = tx * TILE_SIZE;
-      this.highlightLayer.fillStyle(0xffff00, 0.35);
+      this.highlightLayer.fillStyle(0x44ff88, 0.18);
       this.highlightLayer.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-      this.highlightLayer.lineStyle(2, 0xffff00, 0.9);
-      this.highlightLayer.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+      this.highlightLayer.lineStyle(1.5, 0x44ff88, 0.75);
+      this.highlightLayer.strokeRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      /* Corner pips */
+      const cs = 5;
+      this.highlightLayer.fillStyle(0x44ff88, 1);
+      [[0,0],[TILE_SIZE-cs,0],[0,TILE_SIZE-cs],[TILE_SIZE-cs,TILE_SIZE-cs]]
+        .forEach(([ox, oy]) => this.highlightLayer.fillRect(px+ox, py+oy, cs, cs));
     }
+
+    /* Attack targets */
     for (const [tx, ty] of this.validAttacks) {
       const px = ty * TILE_SIZE, py = tx * TILE_SIZE;
-      this.highlightLayer.fillStyle(0xff4444, 0.4);
+      this.highlightLayer.fillStyle(0xff2222, 0.22);
       this.highlightLayer.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-      this.highlightLayer.lineStyle(2, 0xff0000, 0.9);
-      this.highlightLayer.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+      this.highlightLayer.lineStyle(2, 0xff2222, 0.85);
+      this.highlightLayer.strokeRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      /* Diagonal cross */
+      this.highlightLayer.lineStyle(1.5, 0xff4444, 0.7);
+      this.highlightLayer.lineBetween(px + 4, py + 4, px + 14, py + 14);
+      this.highlightLayer.lineBetween(px + TILE_SIZE - 4, py + 4, px + TILE_SIZE - 14, py + 14);
     }
+
+    /* Selected border */
     if (this.selectedPiece) {
       const px = this.selectedPiece.y * TILE_SIZE;
       const py = this.selectedPiece.x * TILE_SIZE;
-      this.highlightLayer.lineStyle(3, 0xffffff, 1);
-      this.highlightLayer.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+      this.highlightLayer.lineStyle(3, 0xffffff, 0.95);
+      this.highlightLayer.strokeRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      this.highlightLayer.lineStyle(1.5, 0xffd700, 0.55);
+      this.highlightLayer.strokeRect(px + 4, py + 4, TILE_SIZE - 8, TILE_SIZE - 8);
     }
-    this.highlightLayer.setDepth(1);
+
+    this.highlightLayer.setDepth(5);
   }
 
-  // -----------------------------------------------------------------------
-  // Input
-  // -----------------------------------------------------------------------
+  /* ── Input handlers ── */
 
   async onPieceClick(piece) {
     const s = this.state;
     if (s.status !== 'active') return;
 
-    // If clicking an enemy when we have a selected piece → try attack
     if (this.selectedPiece && piece.owner !== s.current_player) {
-      const pos = [piece.x, piece.y];
-      const canAtk = this.validAttacks.some(([x,y]) => x === piece.x && y === piece.y);
-      if (canAtk) {
+      if (this.validAttacks.some(([x, y]) => x === piece.x && y === piece.y)) {
         await this.doAttack(this.selectedPiece.id, piece.id);
         return;
       }
     }
-
-    // Select own piece
     if (piece.owner !== s.current_player) return;
     if (piece.has_moved && piece.has_attacked) {
-      this.setStatus('This piece has already acted this turn.');
+      this.setStatus('This unit has already acted this turn.');
       return;
     }
-
     this.selectedPiece = piece;
     const res = await fetch(`/game/${GAME_ID}/moves/${piece.id}/`);
     const data = await res.json();
-    this.validMoves = data.moves.map(m => [m.x, m.y]);
+    this.validMoves   = data.moves.map(m => [m.x, m.y]);
     this.validAttacks = data.attacks.map(a => [a.x, a.y]);
     this.drawHighlights();
     this.showSelectedInfo(piece);
@@ -282,8 +656,7 @@ class GameScene extends Phaser.Scene {
 
   async onTileClick(tx, ty) {
     if (!this.selectedPiece) return;
-    const canMove = this.validMoves.some(([x,y]) => x === tx && y === ty);
-    if (!canMove) {
+    if (!this.validMoves.some(([x, y]) => x === tx && y === ty)) {
       this.selectedPiece = null;
       this.validMoves = [];
       this.validAttacks = [];
@@ -297,7 +670,7 @@ class GameScene extends Phaser.Scene {
   async doMove(pieceId, tx, ty) {
     this.setStatus('Moving…');
     const data = await post(`/game/${GAME_ID}/move/`, { piece_id: pieceId, x: tx, y: ty });
-    if (data.error) { this.setStatus('Error: ' + data.error); return; }
+    if (data.error) { this.setStatus('⚠ ' + data.error); return; }
     this.state = data;
     this.selectedPiece = null;
     this.validMoves = [];
@@ -308,9 +681,9 @@ class GameScene extends Phaser.Scene {
   }
 
   async doAttack(attackerId, targetId) {
-    this.setStatus('Attacking…');
+    this.setStatus('⚔ Striking…');
     const data = await post(`/game/${GAME_ID}/attack/`, { attacker_id: attackerId, target_id: targetId });
-    if (data.error) { this.setStatus('Error: ' + data.error); return; }
+    if (data.error) { this.setStatus('⚠ ' + data.error); return; }
     this.state = data;
     this.selectedPiece = null;
     this.validMoves = [];
@@ -318,44 +691,58 @@ class GameScene extends Phaser.Scene {
     this.renderBoard();
     this.updateUI();
     if (data.status === 'finished') {
-      this.setStatus(`Player ${data.winner} wins! The King is dead!`);
+      this.setStatus(`👑 Player ${data.winner} is victorious!`);
     } else {
-      this.setStatus('');
+      this.setStatus('Strike landed!');
+      setTimeout(() => this.setStatus(''), 1600);
     }
   }
 
-  // -----------------------------------------------------------------------
-  // UI
-  // -----------------------------------------------------------------------
+  /* ── UI updaters ── */
 
   updateUI() {
     const s = this.state;
     const info = document.getElementById('turn-info');
-    const btn = document.getElementById('end-turn-btn');
+    const btn  = document.getElementById('end-turn-btn');
 
     if (s.status === 'finished') {
-      info.innerHTML = `<b>Game Over</b><br>Player ${s.winner} wins!`;
+      const cls = s.winner === 1 ? 'p1color' : 'p2color';
+      info.innerHTML =
+        `<div class="turn-label">Game Over</div>` +
+        `<div class="player-name ${cls}">Player ${s.winner} Wins!</div>`;
       btn.disabled = true;
       return;
     }
 
-    const color = s.current_player === 1 ? '#3a7bd5' : '#e94560';
+    const cls = s.current_player === 1 ? 'p1color' : 'p2color';
+    const sym = SYM[s.current_player].king;
     info.innerHTML =
-      `<b>Turn ${s.turn_number}</b><br>` +
-      `<b style="color:${color}">Player ${s.current_player}'s turn</b>`;
+      `<div class="turn-label">Turn ${s.turn_number}</div>` +
+      `<div class="player-name ${cls}">${sym} Player ${s.current_player}</div>`;
     btn.disabled = false;
   }
 
   showSelectedInfo(piece) {
     const el = document.getElementById('selected-info');
     el.style.display = 'block';
+    const sym = SYM[piece.owner][piece.type];
+    const hpPct = Math.round((piece.hp / piece.max_hp) * 100);
+    const hpColor = hpPct > 60 ? '#44ee88' : hpPct > 30 ? '#ffaa22' : '#ff4444';
     el.innerHTML =
-      `<b>${piece.type.toUpperCase()}</b> (P${piece.owner})<br>` +
-      `HP: ${piece.hp}/${piece.max_hp}<br>` +
-      `ATK: ${piece.attack} &nbsp; DEF: ${piece.defense}<br>` +
-      `Move pts: ${piece.move_points}<br>` +
-      `XP: ${piece.xp} &nbsp; Lvl: ${piece.level}<br>` +
-      `Moved: ${piece.has_moved ? 'Yes' : 'No'} &nbsp; Attacked: ${piece.has_attacked ? 'Yes' : 'No'}`;
+      `<div class="piece-title"><span style="font-size:21px">${sym}</span>` +
+      `${piece.type.charAt(0).toUpperCase()+piece.type.slice(1)}` +
+      `<span style="font-size:10px;color:#6a4a00;margin-left:auto">P${piece.owner}</span></div>` +
+      `<div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${hpPct}%;background:${hpColor}"></div></div>` +
+      `<div class="stat-row"><span>HP</span><span class="stat-val" style="color:${hpColor}">${piece.hp}/${piece.max_hp}</span></div>` +
+      `<div class="stat-row"><span>Attack</span><span class="stat-val">${piece.attack}</span></div>` +
+      `<div class="stat-row"><span>Defense</span><span class="stat-val">${piece.defense}</span></div>` +
+      `<div class="stat-row"><span>Move pts</span><span class="stat-val">${piece.move_points}</span></div>` +
+      `<div class="stat-row"><span>XP / Level</span><span class="stat-val">${piece.xp} / ${piece.level}</span></div>` +
+      `<div class="stat-row" style="margin-top:3px;font-size:10px">` +
+      `<span style="color:${piece.has_moved?'#ff6666':'#55cc77'}">` +
+      `${piece.has_moved ? '✗ Moved' : '✓ Can move'}</span>` +
+      `<span style="color:${piece.has_attacked?'#ff6666':'#55cc77'}">` +
+      `${piece.has_attacked ? '✗ Attacked' : '✓ Can attack'}</span></div>`;
   }
 
   setStatus(msg) {
@@ -365,54 +752,66 @@ class GameScene extends Phaser.Scene {
   onHover(ptr) {
     const tx = Math.floor(ptr.y / TILE_SIZE);
     const ty = Math.floor(ptr.x / TILE_SIZE);
-    if (!this.state) return;
+    if (!this.state || tx < 0 || tx >= 8 || ty < 0 || ty >= 8) {
+      this.tooltip.setVisible(false);
+      return;
+    }
     const piece = this.state.pieces.find(p => p.x === tx && p.y === ty);
+    const maxX = BOARD * TILE_SIZE - 2;
     if (piece) {
-      this.tooltipText
-        .setText(`${piece.type} P${piece.owner}\nHP:${piece.hp}/${piece.max_hp} ATK:${piece.attack}`)
-        .setPosition(ptr.x + 10, ptr.y - 10)
+      const sym = SYM[piece.owner][piece.type];
+      const hpPct = Math.round((piece.hp / piece.max_hp) * 100);
+      this.tooltip
+        .setText(`${sym} ${piece.type}  P${piece.owner}\nHP ${piece.hp}/${piece.max_hp} (${hpPct}%)  ATK ${piece.attack}  DEF ${piece.defense}`)
+        .setPosition(Math.min(ptr.x + 14, maxX - 170), Math.max(ptr.y - 44, 0))
         .setVisible(true);
     } else {
-      this.tooltipText.setVisible(false);
+      const tile = this.tileMap?.[`${tx},${ty}`];
+      if (tile) {
+        const bld = tile.building_id ? this.buildingMap[tile.building_id] : null;
+        let tip = tile.terrain.charAt(0).toUpperCase() + tile.terrain.slice(1);
+        if (bld) tip += `\n${bld.type === 'castle' ? '🏰' : '🏠'} ${bld.type}${bld.owner ? ` (P${bld.owner})` : ' (neutral)'}`;
+        this.tooltip.setText(tip)
+          .setPosition(Math.min(ptr.x + 14, maxX - 120), Math.max(ptr.y - 34, 0))
+          .setVisible(true);
+      } else {
+        this.tooltip.setVisible(false);
+      }
     }
   }
 }
 
-// -----------------------------------------------------------------------
-// End turn button wiring (outside Phaser)
-// -----------------------------------------------------------------------
+/* ── End Turn ── */
 document.getElementById('end-turn-btn').addEventListener('click', async () => {
   const btn = document.getElementById('end-turn-btn');
   btn.disabled = true;
   const data = await post(`/game/${GAME_ID}/end_turn/`, {});
   if (data.error) {
-    document.getElementById('status-msg').textContent = 'Error: ' + data.error;
+    document.getElementById('status-msg').textContent = '⚠ ' + data.error;
     btn.disabled = false;
     return;
   }
-  window.__gameScene.state = data;
-  window.__gameScene.selectedPiece = null;
-  window.__gameScene.validMoves = [];
-  window.__gameScene.validAttacks = [];
-  window.__gameScene.renderBoard();
-  window.__gameScene.updateUI();
+  const sc = window.__gameScene;
+  sc.state = data;
+  sc.selectedPiece = null;
+  sc.validMoves = [];
+  sc.validAttacks = [];
+  sc.renderBoard();
+  sc.updateUI();
   document.getElementById('status-msg').textContent = '';
   document.getElementById('selected-info').style.display = 'none';
 });
 
-// -----------------------------------------------------------------------
-// Boot
-// -----------------------------------------------------------------------
-const config = {
+/* ── Boot ── */
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   width: BOARD * TILE_SIZE,
   height: BOARD * TILE_SIZE,
   parent: 'game-container',
-  backgroundColor: '#1a1a2e',
+  backgroundColor: '#0d0d1a',
   scene: GameScene,
-};
+});
 
-const game = new Phaser.Game(config);
 game.events.on('ready', () => {
   window.__gameScene = game.scene.getScene('GameScene');
 });
